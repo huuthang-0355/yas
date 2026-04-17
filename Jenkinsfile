@@ -65,7 +65,7 @@ pipeline {
                         echo 'Đang chạy Unit Test và tạo report Coverage cho CÁC SERVICE BỊ THAY ĐỔI...'
                         for (service in services) {
                             stage("Test ${service}") {
-                                sh "mvn clean test jacoco:report -pl ${service} '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
+                                sh "mvn clean test jacoco:report -pl ${service} -am '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
                             }
                         }
                     }
@@ -96,7 +96,7 @@ pipeline {
                         echo 'Đang đóng gói CÁC SERVICE BỊ THAY ĐỔI...'
                         for (service in services) {
                             stage("Build ${service}") {
-                                sh "mvn package -pl ${service} -DskipTests -DskipCompile=false"
+                                sh "mvn package -pl ${service} -am -DskipTests -DskipCompile=false"
                             }
                         }
                     }
