@@ -1,19 +1,31 @@
+@com.cloudbees.groovy.cps.NonCPS
+def getAffectedPaths() {
+    def paths = []
+    for (changeSet in currentBuild.changeSets) {
+        for (entry in changeSet.items) {
+            for (file in entry.affectedFiles) {
+                paths.add(file.path) // Lưu vào mảng String đơn giản
+            }
+        }
+    }
+    return paths
+}
+
 def getChangedServices() {
     def changedServices = [] as Set
-    for (changeset in currentBuild.changeSets) {
-        for (entry in changeset.items) {
-            for (file in entry.affectedFiles) {
-                if (file.path.contains('/')) {
-                    def folder = file.path.split('/')[0]
-                    if (fileExists("${folder}/pom.xml")) {
-                        changedServices.add(folder)
-                    }
-                }
+    def paths = getAffectedPaths()
+    
+    for (path in paths) {
+        if (path.contains('/')) {
+            def folder = path.split('/')[0]
+            if (fileExists("${folder}/pom.xml")) {
+                changedServices.add(folder)
             }
         }
     }
     return changedServices
 }
+
 
 pipeline {
     agent any
