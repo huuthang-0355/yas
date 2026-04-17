@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties({ServiceUrlConfig.class, CorsConfig.class})
 public class InventoryApplication {
     public static void main(String[] args) {
+        // test pipeline for inventory
         SpringApplication.run(InventoryApplication.class, args);
     }
 }
