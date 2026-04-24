@@ -110,7 +110,8 @@ pipeline {
                         
                         jacoco execPattern: '**/target/jacoco.exec',
                                classPattern: classPatterns,
-                               sourcePattern: sourcePatterns
+                               sourcePattern: sourcePatterns,
+                               exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
                     }
                 }
             }
