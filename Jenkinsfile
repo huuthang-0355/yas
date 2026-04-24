@@ -57,6 +57,7 @@ pipeline {
                 
                 script {
                     def services = getChangedServices()
+                    def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
                     
                     if (isManualTrigger && services.isEmpty()) {
                         // 'Build Now' in Jenkins AND no git diff → full project build
