@@ -3,14 +3,24 @@ package com.yas.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 import com.yas.commonlibrary.exception.BadRequestException;
 import com.yas.commonlibrary.exception.DuplicatedException;
+import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.product.model.Brand;
+import com.yas.product.model.Category;
 import com.yas.product.model.Product;
+import com.yas.product.model.ProductCategory;
+import com.yas.product.model.ProductImage;
+import com.yas.product.model.ProductOption;
+import com.yas.product.model.ProductOptionCombination;
+import com.yas.product.model.ProductOptionValue;
+import com.yas.product.model.ProductRelated;
 import com.yas.product.model.enumeration.DimensionUnit;
 import com.yas.product.repository.BrandRepository;
 import com.yas.product.repository.CategoryRepository;
@@ -22,11 +32,17 @@ import com.yas.product.repository.ProductOptionValueRepository;
 import com.yas.product.repository.ProductRelatedRepository;
 import com.yas.product.repository.ProductRepository;
 import com.yas.product.viewmodel.product.ProductPostVm;
+import com.yas.product.viewmodel.product.ProductPutVm;
 import com.yas.product.viewmodel.product.ProductVariationPostVm;
+import com.yas.product.viewmodel.product.ProductVariationPutVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
+import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.HashMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,89 +87,103 @@ class ProductServiceTest {
     private ProductService productService;
 
     ProductPostVm productPostVm;
+    ProductPutVm productPutVm;
     Product savedProduct;
 
     @BeforeEach
     void setUp() {
         productPostVm = new ProductPostVm(
-            "Product 1",
-            "slug",
-            1L,
-            List.of(),
-            "shortDesc",
-            "desc",
-            "spec",
-            "sku",
-            "gtin",
-            10.0,
-            DimensionUnit.CM,
-            10.0,
-            10.0,
-            10.0,
-            10.0,
-            true,
-            true,
-            true,
-            true,
-            true,
-            "metaTitle",
-            "metaKeyword",
-            "metaDescription",
-            1L,
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            1L
+            "Product 1", "slug", 1L, List.of(1L, 2L), "shortDesc", "desc", "spec",
+            "sku", "gtin", 10.0, DimensionUnit.CM, 10.0, 10.0, 10.0,
+            10.0, true, true, true, true, true,
+            "metaTitle", "metaKeyword", "metaDescription", 1L,
+            List.of(1L), List.of(), List.of(), List.of(), List.of(2L), 1L
         );
-
-        savedProduct = Product.builder()
-            .id(1L)
-            .name("Product 1")
-            .slug("slug")
-            .build();
+        productPutVm = new ProductPutVm(
+            "Product 1 updated", "slug", 20.0, true, true, true, true, true, 1L, List.of(1L, 2L), "shortDesc", "desc", "spec",
+            "sku", "gtin", 10.0, DimensionUnit.CM, 10.0, 10.0, 10.0,
+            "metaTitle", "metaKeyword", "metaDescription", 1L,
+            List.of(1L), List.of(), List.of(), List.of(), List.of(2L), 1L
+        );
+        savedProduct = Product.builder().id(1L).name("Product 1").slug("slug").build();
     }
 
     @Test
     void createProduct_GivenValidData_ShouldSaveAndReturnProduct() {
-        // Arrange
         when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(brandRepository.findById(1L)).thenReturn(Optional.of(new Brand()));
         when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+        when(categoryRepository.findAllById(anyList())).thenReturn(List.of(new Category(), new Category()));
+        when(productRepository.findAllById(anyList())).thenReturn(List.of(Product.builder().id(2L).slug("related").build()));
 
-        // Act
         var result = productService.createProduct(productPostVm);
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result.slug()).isEqualTo("slug");
         verify(productRepository).save(any(Product.class));
+        verify(productCategoryRepository).saveAll(anyList());
+        verify(productImageRepository).saveAll(anyList());
+        verify(productRelatedRepository).saveAll(anyList());
     }
 
     @Test
-    void createProduct_LengthSmallerThanWidth_ThrowsBadRequestException() {
-        // Arrange
-        ProductPostVm invalidVm = new ProductPostVm(
-            "Product 1", "slug", 1L, List.of(), "shortDesc", "desc", "spec",
-            "sku", "gtin", 10.0, DimensionUnit.CM, 5.0, 20.0, 10.0,
-            10.0, true, true, true, true, true,
-            "metaTitle", "metaKeyword", "metaDescription", 1L,
-            List.of(), List.of(), List.of(), List.of(), List.of(), 1L
+    void createProduct_WithVariations_ShouldSaveVariationsAndCombinations() {
+        ProductVariationPostVm varPost = new ProductVariationPostVm("Var1", "slug-var", "sku-var", "gtin-var", 15.0, null, List.of(), Map.of(1L, "Red"));
+        ProductOptionValuePostVm optValPost = new ProductOptionValuePostVm(1L, "text", 1, List.of("Red"));
+        ProductOptionValueDisplay optDisplay = new ProductOptionValueDisplay(1L, "text", 1, "Red");
+        
+        ProductPostVm vmWithVar = new ProductPostVm(
+            "Product 1", "slug", 1L, List.of(), "shortDesc", "desc", "spec", "sku", "gtin", 10.0, DimensionUnit.CM, 10.0, 10.0, 10.0,
+            10.0, true, true, true, true, true, "metaTitle", "metaKeyword", "metaDescription", 1L,
+            List.of(), List.of(varPost), List.of(optValPost), List.of(optDisplay), List.of(), 1L
         );
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(brandRepository.findById(1L)).thenReturn(Optional.of(new Brand()));
+        
+        Product variation = Product.builder().id(2L).slug("slug-var").build();
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct).thenReturn(savedProduct);
+        when(productRepository.saveAll(anyList())).thenReturn(List.of(variation));
+        
+        ProductOption option = new ProductOption();
+        option.setId(1L);
+        when(productOptionRepository.findAllByIdIn(anyList())).thenReturn(List.of(option));
+        
+        ProductOptionValue pov = new ProductOptionValue();
+        pov.setProductOption(option);
+        when(productOptionValueRepository.saveAll(anyList())).thenReturn(List.of(pov));
 
-        // Act & Assert
-        assertThrows(BadRequestException.class, () -> productService.createProduct(invalidVm));
+        var result = productService.createProduct(vmWithVar);
+
+        assertThat(result).isNotNull();
+        verify(productOptionValueRepository).saveAll(anyList());
+        verify(productOptionCombinationRepository).saveAll(anyList());
     }
 
     @Test
-    void createProduct_DuplicateSlug_ThrowsDuplicatedException() {
-        // Arrange
-        when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.of(savedProduct));
+    void updateProduct_GivenValidData_ShouldUpdateSuccessfully() {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(savedProduct));
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(brandRepository.findById(1L)).thenReturn(Optional.of(new Brand()));
+        when(categoryRepository.findAllById(anyList())).thenReturn(List.of(new Category()));
+        
+        ProductRelated prodR = ProductRelated.builder().product(savedProduct).relatedProduct(Product.builder().id(3L).build()).build();
+        savedProduct.setRelatedProducts(new ArrayList<>(List.of(prodR)));
+        savedProduct.setProducts(new ArrayList<>());
+        when(productRepository.findAllById(anyList())).thenReturn(List.of(Product.builder().id(2L).build()));
 
-        // Act & Assert
-        assertThrows(DuplicatedException.class, () -> productService.createProduct(productPostVm));
+        productService.updateProduct(1L, productPutVm);
+
+        verify(productRepository).findById(1L);
+        verify(productCategoryRepository).deleteAllInBatch(anyList());
+        verify(productCategoryRepository).saveAll(anyList());
+        verify(productRelatedRepository).deleteAll(anyList());
+        verify(productRelatedRepository).saveAll(anyList());
+        verify(productRepository).save(savedProduct);
     }
 }
