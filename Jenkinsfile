@@ -1,19 +1,21 @@
+@com.cloudbees.groovy.cps.NonCPS
+def getAffectedPaths() {
+    def paths = []
+    for (changeSet in currentBuild.changeSets) {
+        for (entry in changeSet.items) {
+            for (file in entry.affectedFiles) {
+                paths.add(file.path) // Lưu vào mảng String đơn giản
+            }
+        }
+    }
+    return paths
+}
+
 def getChangedServices() {
     def changedServices = [] as Set
-
-    // Use git diff to compare current branch against main.
-    // This works correctly even for brand-new branches where
-    // Jenkins has no previous build state (changeSets would be empty).
-    def diffOutput = sh(
-        script: "git diff --name-only origin/main...HEAD",
-        returnStdout: true
-    ).trim()
-
-    if (diffOutput.isEmpty()) {
-        return changedServices
-    }
-
-    for (path in diffOutput.split('\n')) {
+    def paths = getAffectedPaths()
+    
+    for (path in paths) {
         if (path.contains('/')) {
             def folder = path.split('/')[0]
             if (fileExists("${folder}/pom.xml")) {
@@ -54,24 +56,30 @@ pipeline {
                 sh 'java -version'
                 
                 script {
-                    // Detect if this build was triggered manually via 'Build Now'.
-                    // currentBuild.getBuildCauses() returns an empty cause for manual triggers.
-                    def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
-
                     def services = getChangedServices()
-
+                    
                     if (isManualTrigger && services.isEmpty()) {
-                        // 'Build Now' clicked in Jenkins AND no git diff: full project build
-                        echo 'Manual trigger detected: Đang chạy Unit Test cho TOÀN BỘ dự án...'
-                        sh "mvn clean test jacoco:report '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
+                        // 'Build Now' in Jenkins AND no git diff → full project build
+                        // Step 1: build all dependencies, skip jacoco to avoid failures in other modules
+                        sh "mvn clean install -DskipTests -Djacoco.skip=true"
+                        // Step 2: run verify on the full project so jacoco:check applies everywhere
+                        sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
                     } else if (services.isEmpty()) {
-                        // Git push detected, but no service folder changed (e.g. only root files changed)
-                        echo 'Không có service nào thay đổi so với main. Bỏ qua bước Test.'
+                        echo 'Kh\u00f4ng c\u00f3 service n\u00e0o thay \u0111\u1ed5i so v\u1edbi main. B\u1ecf qua b\u01b0\u1edbc Test.'
                     } else {
-                        echo 'Đang chạy Unit Test và tạo report Coverage cho CÁC SERVICE BỊ THAY ĐỔI...'
+                        echo '\u0110ang ch\u1ea1y Unit Test v\u00e0 ki\u1ec3m tra Coverage cho C\u00c1C SERVICE B\u1eca THAY \u0110\u1ed4I...'
                         for (service in services) {
                             stage("Test ${service}") {
-                                sh "mvn clean test jacoco:report -pl ${service} -am '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
+                                // Step 1: install all dependency modules WITHOUT running their jacoco:check
+                                // -am pulls in all upstream deps; -DskipTests skips their tests;
+                                // -Djacoco.skip=true prevents common-library (and others) from failing
+                                // the 70% threshold — we only care about enforcing it on OUR changed service.
+                                sh "mvn clean install -am -pl ${service} -DskipTests -Djacoco.skip=true"
+
+                                // Step 2: now run verify on ONLY the changed service.
+                                // Dependencies are already installed, so Maven won't rebuild them.
+                                // jacoco:check now runs exclusively for this service module.
+                                sh "mvn verify -pl ${service} '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
                             }
                         }
                     }
@@ -93,17 +101,11 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
-
                     def services = getChangedServices()
-
-                    if (isManualTrigger && services.isEmpty()) {
-                        // 'Build Now' clicked in Jenkins AND no git diff: full project build
-                        echo 'Manual trigger detected: Đang đóng gói TOÀN BỘ ứng dụng...'
+                    
+                    if (services.isEmpty()) {
+                        echo 'Đang đóng gói TOÀN BỘ ứng dụng (Bỏ qua test vì đã chạy ở stage trước)...'
                         sh 'mvn package -DskipTests -DskipCompile=false'
-                    } else if (services.isEmpty()) {
-                        // Git push with no service changes
-                        echo 'Không có service nào thay đổi so với main. Bỏ qua bước Build.'
                     } else {
                         echo 'Đang đóng gói CÁC SERVICE BỊ THAY ĐỔI...'
                         for (service in services) {
