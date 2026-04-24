@@ -75,6 +75,7 @@ pipeline {
 
                 script {
                     def services = getChangedServices()
+                    def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
 
                     if (isManualTrigger && services.isEmpty()) {
                         sh "mvn clean install -DskipTests -Djacoco.skip=true"
@@ -99,7 +100,8 @@ pipeline {
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                     jacoco execPattern: '**/target/jacoco.exec',
                            classPattern: '**/target/classes',
-                           sourcePattern: '**/src/main/java'
+                           sourcePattern: '**/src/main/java',
+                           exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
                 }
             }
         }
