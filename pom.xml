@@ -379,10 +379,14 @@
                     </executions>
                     <configuration>
                         <excludes>
-                            <exclude>com/yas/**/*Application.class</exclude>
-                            <exclude>com/yas/**/config/**</exclude>
-                            <exclude>com/yas/**/exception/**</exclude>
-                            <exclude>com/yas/**/constants/**</exclude>
+                            <exclude>**/*Application.class</exclude>
+                            <exclude>**/config/**</exclude>
+                            <exclude>**/exception/**</exclude>
+                            <exclude>**/constants/**</exclude>
+                            <exclude>**/mapper/**</exclude>
+                            <exclude>**/model/**</exclude>
+                            <exclude>**/dto/**</exclude>
+                            <exclude>**/viewmodel/**</exclude>
                         </excludes>
                     </configuration>
                 </plugin>
