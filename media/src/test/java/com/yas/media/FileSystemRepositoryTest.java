@@ -107,5 +107,32 @@ class FileSystemRepositoryTest {
         assertThrows(IllegalStateException.class, () -> fileSystemRepository.getFile(filePathStr));
     }
 
+    @Test
+    void testPersistFile_whenDirectoryIsExist_thenSaveSuccess() throws IOException {
+        String filename = "test-file.png";
+        byte[] content = "test-content".getBytes();
+
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+        String absolutePath = directory.getAbsolutePath();
+        when(filesystemConfig.getDirectory()).thenReturn(absolutePath);
+
+        String result = fileSystemRepository.persistFile(filename, content);
+        org.junit.jupiter.api.Assertions.assertTrue(result.contains(filename));
+    }
+
+    @Test
+    void testPersistFile_whenFilenameIsInvalid_thenThrowsIllegalArgumentException() throws IOException {
+        String filename = "../test-file.png";
+        byte[] content = "test-content".getBytes();
+
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+        String absolutePath = directory.getAbsolutePath();
+        when(filesystemConfig.getDirectory()).thenReturn(absolutePath);
+
+        assertThrows(IllegalArgumentException.class, () -> fileSystemRepository.persistFile(filename, content));
+    }
+
 }
 
