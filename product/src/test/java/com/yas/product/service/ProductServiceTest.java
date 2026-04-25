@@ -14,7 +14,9 @@ import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.product.model.Brand;
 import com.yas.product.model.Category;
 import com.yas.product.model.Product;
+import com.yas.product.model.ProductImage;
 import com.yas.product.model.ProductOption;
+import com.yas.product.model.ProductOptionCombination;
 import com.yas.product.model.ProductOptionValue;
 import com.yas.product.model.ProductRelated;
 import com.yas.product.model.enumeration.DimensionUnit;
@@ -29,10 +31,12 @@ import com.yas.product.repository.ProductRelatedRepository;
 import com.yas.product.repository.ProductRepository;
 import com.yas.product.viewmodel.product.ProductPostVm;
 import com.yas.product.viewmodel.product.ProductPutVm;
+import com.yas.product.viewmodel.product.ProductQuantityPutVm;
 import com.yas.product.viewmodel.product.ProductVariationPostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
+import com.yas.product.viewmodel.NoFileMediaVm;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -260,5 +264,110 @@ class ProductServiceTest {
             .thenReturn(Optional.of(Product.builder().id(2L).slug("slug").build()));
 
         assertThrows(DuplicatedException.class, () -> productService.updateProduct(1L, productPutVm));
+    }
+
+    @Test
+    void getLatestProducts_CountIsZero_ReturnsEmptyList() {
+        assertThat(productService.getLatestProducts(0)).isEmpty();
+    }
+
+    @Test
+    void getLatestProducts_WithProducts_ReturnsMappedProducts() {
+        Product p = Product.builder().id(11L).name("P11").slug("p11").price(12.0).build();
+        when(productRepository.getLatestProducts(any())).thenReturn(List.of(p));
+
+        assertThat(productService.getLatestProducts(1)).hasSize(1);
+    }
+
+    @Test
+    void getProductSlug_WithParent_ReturnsParentSlug() {
+        Product parent = Product.builder().id(100L).slug("parent-slug").build();
+        Product child = Product.builder().id(101L).slug("child-slug").parent(parent).build();
+        when(productRepository.findById(101L)).thenReturn(Optional.of(child));
+
+        var result = productService.getProductSlug(101L);
+
+        assertThat(result.slug()).isEqualTo("parent-slug");
+        assertThat(result.id()).isEqualTo(101L);
+    }
+
+    @Test
+    void deleteProduct_WhenChildHasCombinations_ShouldDeleteCombinationsAndSave() {
+        Product parent = Product.builder().id(10L).build();
+        Product child = Product.builder().id(20L).parent(parent).build();
+        ProductOptionCombination poc = ProductOptionCombination.builder().id(1L).product(child).build();
+        when(productRepository.findById(20L)).thenReturn(Optional.of(child));
+        when(productOptionCombinationRepository.findAllByProduct(child)).thenReturn(List.of(poc));
+
+        productService.deleteProduct(20L);
+
+        verify(productOptionCombinationRepository).deleteAll(anyList());
+        verify(productRepository).save(child);
+    }
+
+    @Test
+    void getFeaturedProductsById_UsesParentThumbnailWhenChildThumbnailIsEmpty() {
+        Product parent = Product.builder().id(30L).thumbnailMediaId(300L).build();
+        Product child = Product.builder().id(31L).name("Child").slug("child").price(20.0).parent(parent).thumbnailMediaId(301L).build();
+        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(child));
+        when(productRepository.findById(30L)).thenReturn(Optional.of(parent));
+        when(mediaService.getMedia(301L)).thenReturn(new NoFileMediaVm(301L, "", "", "", ""));
+        when(mediaService.getMedia(300L)).thenReturn(new NoFileMediaVm(300L, "", "", "", "http://parent-thumb"));
+
+        var result = productService.getFeaturedProductsById(List.of(31L));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().thumbnailUrl()).isEqualTo("http://parent-thumb");
+    }
+
+    @Test
+    void getProductVariationsByParentId_HasNoOptions_ReturnsEmptyList() {
+        Product parent = Product.builder().id(40L).hasOptions(false).build();
+        when(productRepository.findById(40L)).thenReturn(Optional.of(parent));
+
+        assertThat(productService.getProductVariationsByParentId(40L)).isEmpty();
+    }
+
+    @Test
+    void getProductVariationsByParentId_HasOptions_ReturnsMappedVariations() {
+        ProductOption option = new ProductOption();
+        option.setId(77L);
+        Product variation = Product.builder().id(51L).name("Var").slug("var").sku("sku-v").gtin("gtin-v").price(9.9).published(true)
+            .thumbnailMediaId(510L).productImages(List.of(ProductImage.builder().imageId(511L).build())).build();
+        Product parent = Product.builder().id(50L).hasOptions(true).products(List.of(variation)).build();
+        ProductOptionCombination combination = ProductOptionCombination.builder()
+            .id(9L).product(variation).productOption(option).value("Red").displayOrder(1).build();
+
+        when(productRepository.findById(50L)).thenReturn(Optional.of(parent));
+        when(productOptionCombinationRepository.findAllByProduct(variation)).thenReturn(List.of(combination));
+        when(mediaService.getMedia(510L)).thenReturn(new NoFileMediaVm(510L, "", "", "", "http://thumb"));
+        when(mediaService.getMedia(511L)).thenReturn(new NoFileMediaVm(511L, "", "", "", "http://img"));
+
+        var result = productService.getProductVariationsByParentId(50L);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().options()).containsEntry(77L, "Red");
+    }
+
+    @Test
+    void subtractStockQuantity_ShouldNotGoBelowZero() {
+        Product p = Product.builder().id(60L).stockTrackingEnabled(true).stockQuantity(3L).build();
+        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(p));
+
+        productService.subtractStockQuantity(List.of(new ProductQuantityPutVm(60L, 5L)));
+
+        assertThat(p.getStockQuantity()).isEqualTo(0L);
+        verify(productRepository).saveAll(anyList());
+    }
+
+    @Test
+    void restoreStockQuantity_ShouldAddQuantities() {
+        Product p = Product.builder().id(70L).stockTrackingEnabled(true).stockQuantity(10L).build();
+        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(p));
+
+        productService.restoreStockQuantity(List.of(new ProductQuantityPutVm(70L, 4L), new ProductQuantityPutVm(70L, 6L)));
+
+        assertThat(p.getStockQuantity()).isEqualTo(20L);
+        verify(productRepository).saveAll(anyList());
     }
 }
