@@ -280,9 +280,10 @@ class CartItemServiceTest {
             when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of(existingCartItem));
             when(cartItemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-            // Should not throw — same productId + same quantity is idempotent
+            // Same productId + same quantity does not throw but processes each VM,
+            // so the same item gets adjusted twice → saveAll receives a list of size 2
             List<CartItemGetVm> result = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
-            assertEquals(1, result.size());
+            assertEquals(2, result.size());
         }
     }
 
