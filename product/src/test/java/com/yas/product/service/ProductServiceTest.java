@@ -27,6 +27,7 @@ import com.yas.product.viewmodel.product.ProductPostVm;
 import com.yas.product.viewmodel.product.ProductPutVm;
 import com.yas.product.viewmodel.product.ProductVariationPostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
+import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +93,12 @@ class ProductServiceTest {
             "Product 1 updated", "slug", 20.0, true, true, true, true, true, 1L, new ArrayList<>(List.of(1L, 2L)), "shortDesc", "desc", "spec",
             "sku", "gtin", 10.0, DimensionUnit.CM, 10.0, 10.0, 10.0,
             "metaTitle", "metaKeyword", "metaDescription", 1L,
-            new ArrayList<>(List.of(1L)), List.of(), List.of(), List.of(), new ArrayList<>(List.of(2L)), 1L
+            new ArrayList<>(List.of(1L)),
+            List.of(),
+            List.of(new ProductOptionValuePutVm(1L, "text", 1, List.of("Red"))),
+            List.of(new ProductOptionValueDisplay(1L, "text", 1, "Red")),
+            new ArrayList<>(List.of(2L)),
+            1L
         );
         savedProduct = Product.builder().id(1L).name("Product 1").slug("slug").build();
     }
@@ -160,6 +166,12 @@ class ProductServiceTest {
         when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(brandRepository.findById(1L)).thenReturn(Optional.of(new Brand()));
         when(categoryRepository.findAllById(anyList())).thenReturn(List.of(new Category(), new Category()));
+        ProductOption option = new ProductOption();
+        option.setId(1L);
+        when(productOptionRepository.findAllByIdIn(anyList())).thenReturn(List.of(option));
+        ProductOptionValue updatedOptionValue = new ProductOptionValue();
+        updatedOptionValue.setProductOption(option);
+        when(productOptionValueRepository.saveAll(anyList())).thenReturn(List.of(updatedOptionValue));
         
         ProductRelated prodR = ProductRelated.builder().product(savedProduct).relatedProduct(Product.builder().id(3L).build()).build();
         savedProduct.setRelatedProducts(new ArrayList<>(List.of(prodR)));
