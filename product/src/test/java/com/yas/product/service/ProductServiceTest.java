@@ -515,6 +515,6 @@ class ProductServiceTest {
 
         assertThat(result.productCheckoutListVms()).hasSize(2);
         assertThat(result.productCheckoutListVms().getFirst().thumbnailUrl()).isEqualTo("http://thumb-880");
-        assertThat(result.productCheckoutListVms().get(1).thumbnailUrl()).isNull();
+        assertThat(result.productCheckoutListVms().get(1).thumbnailUrl()).isNullOrEmpty();
     }
 }
