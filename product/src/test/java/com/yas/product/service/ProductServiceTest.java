@@ -1,12 +1,16 @@
 package com.yas.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yas.commonlibrary.exception.BadRequestException;
+import com.yas.commonlibrary.exception.DuplicatedException;
+import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.product.model.Brand;
 import com.yas.product.model.Category;
 import com.yas.product.model.Product;
@@ -186,5 +190,75 @@ class ProductServiceTest {
         verify(productRelatedRepository).deleteAll(anyList());
         verify(productRelatedRepository).saveAll(anyList());
         verify(productRepository).saveAll(anyList());
+    }
+
+    @Test
+    void createProduct_LengthLessThanWidth_ThrowsBadRequestException() {
+        ProductPostVm invalidVm = new ProductPostVm(
+            "Product invalid", "slug-invalid", 1L, List.of(), "shortDesc", "desc", "spec",
+            "sku-invalid", "gtin-invalid", 10.0, DimensionUnit.CM, 8.0, 10.0, 10.0,
+            10.0, true, true, true, true, true,
+            "metaTitle", "metaKeyword", "metaDescription", 1L,
+            List.of(), List.of(), List.of(), List.of(), List.of(), 1L
+        );
+
+        assertThrows(BadRequestException.class, () -> productService.createProduct(invalidVm));
+    }
+
+    @Test
+    void createProduct_BrandNotFound_ThrowsNotFoundException() {
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(brandRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> productService.createProduct(productPostVm));
+    }
+
+    @Test
+    void createProduct_DuplicateSlug_ThrowsDuplicatedException() {
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString()))
+            .thenReturn(Optional.of(Product.builder().id(99L).slug("slug").build()));
+
+        assertThrows(DuplicatedException.class, () -> productService.createProduct(productPostVm));
+    }
+
+    @Test
+    void createProduct_WithVariationsAndNoMatchingOptions_ThrowsBadRequestException() {
+        ProductVariationPostVm varPost = new ProductVariationPostVm(
+            "Var1", "slug-var-2", "sku-var-2", "gtin-var-2", 15.0, null, List.of(), Map.of(1L, "Red"));
+        ProductOptionValuePostVm optValPost = new ProductOptionValuePostVm(1L, "text", 1, List.of("Red"));
+        ProductOptionValueDisplay optDisplay = new ProductOptionValueDisplay(1L, "text", 1, "Red");
+        ProductPostVm vmWithVar = new ProductPostVm(
+            "Product 2", "slug-2", null, List.of(), "shortDesc", "desc", "spec", "sku-2", "gtin-2",
+            10.0, DimensionUnit.CM, 10.0, 10.0, 10.0, 10.0, true, true, true, true, true,
+            "metaTitle", "metaKeyword", "metaDescription", 1L,
+            List.of(), List.of(varPost), List.of(optValPost), List.of(optDisplay), List.of(), 1L
+        );
+
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+        when(productRepository.saveAll(anyList())).thenReturn(List.of(Product.builder().id(2L).slug("slug-var-2").build()));
+        when(productOptionRepository.findAllByIdIn(anyList())).thenReturn(List.of());
+
+        assertThrows(BadRequestException.class, () -> productService.createProduct(vmWithVar));
+    }
+
+    @Test
+    void updateProduct_ProductNotFound_ThrowsNotFoundException() {
+        when(productRepository.findById(123L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> productService.updateProduct(123L, productPutVm));
+    }
+
+    @Test
+    void updateProduct_DuplicateSlug_ThrowsDuplicatedException() {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(savedProduct));
+        when(productRepository.findBySlugAndIsPublishedTrue(anyString()))
+            .thenReturn(Optional.of(Product.builder().id(2L).slug("slug").build()));
+
+        assertThrows(DuplicatedException.class, () -> productService.updateProduct(1L, productPutVm));
     }
 }
