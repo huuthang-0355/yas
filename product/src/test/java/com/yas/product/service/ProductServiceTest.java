@@ -185,6 +185,6 @@ class ProductServiceTest {
         verify(productCategoryRepository).saveAll(anyList());
         verify(productRelatedRepository).deleteAll(anyList());
         verify(productRelatedRepository).saveAll(anyList());
-        verify(productRepository).save(savedProduct);
+        verify(productRepository).saveAll(anyList());
     }
 }
