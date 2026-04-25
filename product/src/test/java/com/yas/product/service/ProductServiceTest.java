@@ -1,24 +1,16 @@
 package com.yas.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
 
-import com.yas.commonlibrary.exception.BadRequestException;
-import com.yas.commonlibrary.exception.DuplicatedException;
-import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.product.model.Brand;
 import com.yas.product.model.Category;
 import com.yas.product.model.Product;
-import com.yas.product.model.ProductCategory;
-import com.yas.product.model.ProductImage;
 import com.yas.product.model.ProductOption;
-import com.yas.product.model.ProductOptionCombination;
 import com.yas.product.model.ProductOptionValue;
 import com.yas.product.model.ProductRelated;
 import com.yas.product.model.enumeration.DimensionUnit;
@@ -34,15 +26,12 @@ import com.yas.product.repository.ProductRepository;
 import com.yas.product.viewmodel.product.ProductPostVm;
 import com.yas.product.viewmodel.product.ProductPutVm;
 import com.yas.product.viewmodel.product.ProductVariationPostVm;
-import com.yas.product.viewmodel.product.ProductVariationPutVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
-import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ArrayList;
-import java.util.HashMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -100,10 +89,10 @@ class ProductServiceTest {
             List.of(1L), List.of(), List.of(), List.of(), List.of(2L), 1L
         );
         productPutVm = new ProductPutVm(
-            "Product 1 updated", "slug", 20.0, true, true, true, true, true, 1L, List.of(1L, 2L), "shortDesc", "desc", "spec",
+            "Product 1 updated", "slug", 20.0, true, true, true, true, true, 1L, new ArrayList<>(List.of(1L, 2L)), "shortDesc", "desc", "spec",
             "sku", "gtin", 10.0, DimensionUnit.CM, 10.0, 10.0, 10.0,
             "metaTitle", "metaKeyword", "metaDescription", 1L,
-            List.of(1L), List.of(), List.of(), List.of(), List.of(2L), 1L
+            new ArrayList<>(List.of(1L)), List.of(), List.of(), List.of(), new ArrayList<>(List.of(2L)), 1L
         );
         savedProduct = Product.builder().id(1L).name("Product 1").slug("slug").build();
     }
@@ -170,7 +159,7 @@ class ProductServiceTest {
         when(productRepository.findByGtinAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(productRepository.findBySkuAndIsPublishedTrue(anyString())).thenReturn(Optional.empty());
         when(brandRepository.findById(1L)).thenReturn(Optional.of(new Brand()));
-        when(categoryRepository.findAllById(anyList())).thenReturn(List.of(new Category()));
+        when(categoryRepository.findAllById(anyList())).thenReturn(List.of(new Category(), new Category()));
         
         ProductRelated prodR = ProductRelated.builder().product(savedProduct).relatedProduct(Product.builder().id(3L).build()).build();
         savedProduct.setRelatedProducts(new ArrayList<>(List.of(prodR)));
