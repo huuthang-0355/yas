@@ -249,6 +249,20 @@ class MediaServiceUnitTest {
     }
 
     @Test
+    void getFile_whenValidIdAndName_thenReturnData() {
+        byte[] content = "test-content".getBytes();
+        java.io.InputStream inputStream = new java.io.ByteArrayInputStream(content);
+        when(mediaRepository.findById(1L)).thenReturn(Optional.of(media));
+        when(fileSystemRepository.getFile(any())).thenReturn(inputStream);
+
+        MediaDto mediaDto = mediaService.getFile(1L, "file");
+
+        assertNotNull(mediaDto);
+        assertEquals(org.springframework.http.MediaType.valueOf("image/jpeg"), mediaDto.getMediaType());
+        assertEquals(inputStream, mediaDto.getContent());
+    }
+
+    @Test
     void getFileByIds() {
         // Given
         var ip15 = getMedia(-1L, "Iphone 15");

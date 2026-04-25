@@ -98,10 +98,22 @@ pipeline {
                 always {
                     echo 'Upload Test Result và TestCoverage cho Phase Test...'
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
-                    jacoco execPattern: '**/target/jacoco.exec',
-                           classPattern: '**/target/classes',
-                           sourcePattern: '**/src/main/java',
-                           exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
+                    script {
+                        def classPatterns = '**/target/classes'
+                        def sourcePatterns = '**/src/main/java'
+                        def services = getChangedServices()
+                        def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                        
+                        if (!services.isEmpty() && !(isManualTrigger && services.isEmpty())) {
+                            classPatterns = services.collect { "${it}/target/classes" }.join(',')
+                            sourcePatterns = services.collect { "${it}/src/main/java" }.join(',')
+                        }
+                        
+                        jacoco execPattern: '**/target/jacoco.exec',
+                               classPattern: classPatterns,
+                               sourcePattern: sourcePatterns,
+                               exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
+                    }
                 }
             }
         }
