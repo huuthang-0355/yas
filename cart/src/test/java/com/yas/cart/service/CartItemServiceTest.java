@@ -247,6 +247,56 @@ class CartItemServiceTest {
             assertEquals(1, cartItemGetVms.size());
             assertEquals(expectedQuantity, cartItemGetVms.getFirst().quantity());
         }
+
+        @Test
+        void testDeleteOrAdjustCartItem_whenProductNotInCart_shouldSkipItem() {
+            CartItemDeleteVm cartItemDeleteVm = new CartItemDeleteVm(999L, 1);
+            List<CartItemDeleteVm> cartItemDeleteVms = List.of(cartItemDeleteVm);
+
+            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            // return empty list — product 999 not in cart
+            when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of());
+            when(cartItemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            List<CartItemGetVm> cartItemGetVms = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
+
+            assertEquals(0, cartItemGetVms.size());
+        }
+
+        @Test
+        void testDeleteOrAdjustCartItem_whenSameProductIdSameQuantity_shouldNotThrow() {
+            // Same productId + same quantity = duplicate but equal, should NOT throw
+            CartItemDeleteVm cartItemDeleteVm1 = new CartItemDeleteVm(PRODUCT_ID_SAMPLE, 2);
+            CartItemDeleteVm cartItemDeleteVm2 = new CartItemDeleteVm(PRODUCT_ID_SAMPLE, 2);
+
+            CartItem existingCartItem = CartItem.builder()
+                .customerId(CURRENT_USER_ID_SAMPLE)
+                .productId(PRODUCT_ID_SAMPLE)
+                .quantity(5)
+                .build();
+            List<CartItemDeleteVm> cartItemDeleteVms = List.of(cartItemDeleteVm1, cartItemDeleteVm2);
+
+            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+            when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of(existingCartItem));
+            when(cartItemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Should not throw — same productId + same quantity is idempotent
+            List<CartItemGetVm> result = cartItemService.deleteOrAdjustCartItem(cartItemDeleteVms);
+            assertEquals(1, result.size());
+        }
+    }
+
+    @Nested
+    class DeleteCartItemTest {
+
+        @Test
+        void testDeleteCartItem_shouldDeleteByCustomerIdAndProductId() {
+            mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
+
+            cartItemService.deleteCartItem(PRODUCT_ID_SAMPLE);
+
+            verify(cartItemRepository).deleteByCustomerIdAndProductId(CURRENT_USER_ID_SAMPLE, PRODUCT_ID_SAMPLE);
+        }
     }
 
     private void mockCurrentUserId(String userIdToMock) {
@@ -259,4 +309,4 @@ class CartItemServiceTest {
         when(jwt.getSubject()).thenReturn(userIdToMock);
         SecurityContextHolder.setContext(securityContext);
     }
-}
+}
