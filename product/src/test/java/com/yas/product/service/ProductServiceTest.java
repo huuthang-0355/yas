@@ -288,7 +288,7 @@ class ProductServiceTest {
         var result = productService.getProductSlug(101L);
 
         assertThat(result.slug()).isEqualTo("parent-slug");
-        assertThat(result.id()).isEqualTo(101L);
+        assertThat(result.productVariantId()).isEqualTo(101L);
     }
 
     @Test
@@ -332,7 +332,7 @@ class ProductServiceTest {
     void getProductVariationsByParentId_HasOptions_ReturnsMappedVariations() {
         ProductOption option = new ProductOption();
         option.setId(77L);
-        Product variation = Product.builder().id(51L).name("Var").slug("var").sku("sku-v").gtin("gtin-v").price(9.9).published(true)
+        Product variation = Product.builder().id(51L).name("Var").slug("var").sku("sku-v").gtin("gtin-v").price(9.9).isPublished(true)
             .thumbnailMediaId(510L).productImages(List.of(ProductImage.builder().imageId(511L).build())).build();
         Product parent = Product.builder().id(50L).hasOptions(true).products(List.of(variation)).build();
         ProductOptionCombination combination = ProductOptionCombination.builder()
