@@ -500,8 +500,11 @@ class ProductServiceTest {
 
     @Test
     void getProductCheckoutList_WithThumbnailAndWithoutThumbnail() {
-        Product p1 = Product.builder().id(88L).name("P88").slug("p88").thumbnailMediaId(880L).price(20.0).build();
-        Product p2 = Product.builder().id(89L).name("P89").slug("p89").thumbnailMediaId(890L).price(30.0).build();
+        Brand brand = new Brand();
+        brand.setId(10L);
+
+        Product p1 = Product.builder().id(88L).name("P88").slug("p88").brand(brand).thumbnailMediaId(880L).price(20.0).build();
+        Product p2 = Product.builder().id(89L).name("P89").slug("p89").brand(brand).thumbnailMediaId(890L).price(30.0).build();
         Page<Product> page = new PageImpl<>(List.of(p1, p2), PageRequest.of(0, 10), 2);
 
         when(productRepository.findAllPublishedProductsByIds(anyList(), any())).thenReturn(page);
