@@ -79,7 +79,7 @@ pipeline {
 
         stage('Test & Coverage') {
             steps {
-                echo 'Checking Java version...'
+                echo 'Đang kiểm tra phiên bản Java'
                 sh 'java -version'
 
                 script {
@@ -90,9 +90,9 @@ pipeline {
                         sh "mvn clean install -DskipTests -Djacoco.skip=true"
                         sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
                     } else if (services.isEmpty()) {
-                        echo 'No services changed vs main. Skipping test stage.'
+                        echo 'Không có service nào thay đổi so với main. Bỏ qua bước Test.'
                     } else {
-                        echo "Running unit tests & coverage for changed services: ${services}"
+                        echo "Đang chạy Unit Test và kiểm tra Coverage cho CÁC SERVICE BỊ THAY ĐỔI: ${services}"
                         for (service in services) {
                             stage("Test ${service}") {
                                 sh "mvn clean install -am -pl ${service} -DskipTests -Djacoco.skip=true"
@@ -105,7 +105,7 @@ pipeline {
 
             post {
                 always {
-                    echo 'Uploading test results and coverage...'
+                    echo 'Đang Upload Test Result và Test Coverage cho Phase Test...'
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                     jacoco execPattern: '**/target/jacoco.exec',
                            classPattern: '**/target/classes',
@@ -121,10 +121,10 @@ pipeline {
                     def services = getChangedServices()
 
                     if (services.isEmpty()) {
-                        echo 'Building the ENTIRE application (tests already ran above)...'
+                        echo 'Đang đóng gói TOÀN BỘ ứng dụng (Bỏ qua test vì đã chạy ở stage trước)...'
                         sh 'mvn package -DskipTests -DskipCompile=false'
                     } else {
-                        echo "Building changed services: ${services}"
+                        echo "Đang đóng gói CÁC SERVICE BỊ THAY ĐỔI: ${services}"
                         for (service in services) {
                             stage("Build ${service}") {
                                 sh "mvn package -pl ${service} -am -DskipTests -DskipCompile=false"
