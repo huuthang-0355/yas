@@ -19,6 +19,7 @@ import com.yas.product.model.ProductOption;
 import com.yas.product.model.ProductOptionCombination;
 import com.yas.product.model.ProductOptionValue;
 import com.yas.product.model.ProductRelated;
+import com.yas.product.model.ProductCategory;
 import com.yas.product.model.enumeration.DimensionUnit;
 import com.yas.product.repository.BrandRepository;
 import com.yas.product.repository.CategoryRepository;
@@ -41,6 +42,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ArrayList;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -369,5 +373,145 @@ class ProductServiceTest {
 
         assertThat(p.getStockQuantity()).isEqualTo(20L);
         verify(productRepository).saveAll(anyList());
+    }
+
+    @Test
+    void getLatestProducts_WhenRepositoryReturnsEmpty_ReturnsEmptyList() {
+        when(productRepository.getLatestProducts(any())).thenReturn(List.of());
+
+        assertThat(productService.getLatestProducts(5)).isEmpty();
+    }
+
+    @Test
+    void getProductSlug_WithoutParent_ReturnsOwnSlugAndNullVariantId() {
+        Product product = Product.builder().id(81L).slug("own-slug").build();
+        when(productRepository.findById(81L)).thenReturn(Optional.of(product));
+
+        var result = productService.getProductSlug(81L);
+
+        assertThat(result.slug()).isEqualTo("own-slug");
+        assertThat(result.productVariantId()).isNull();
+    }
+
+    @Test
+    void getProductByIds_ReturnsMappedList() {
+        Product p = Product.builder().id(82L).name("P82").slug("p82").price(5.5).build();
+        when(productRepository.findAllByIdIn(List.of(82L))).thenReturn(List.of(p));
+
+        var result = productService.getProductByIds(List.of(82L));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo(82L);
+    }
+
+    @Test
+    void getProductByCategoryIds_ReturnsMappedList() {
+        Product p = Product.builder().id(83L).name("P83").slug("p83").price(6.5).build();
+        when(productRepository.findByCategoryIdsIn(List.of(1L))).thenReturn(List.of(p));
+
+        var result = productService.getProductByCategoryIds(List.of(1L));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo(83L);
+    }
+
+    @Test
+    void getProductByBrandIds_ReturnsMappedList() {
+        Product p = Product.builder().id(84L).name("P84").slug("p84").price(7.5).build();
+        when(productRepository.findByBrandIdsIn(List.of(2L))).thenReturn(List.of(p));
+
+        var result = productService.getProductByBrandIds(List.of(2L));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo(84L);
+    }
+
+    @Test
+    void deleteProduct_WhenMainProduct_ShouldMarkUnpublishedAndSaveOnly() {
+        Product main = Product.builder().id(85L).build();
+        when(productRepository.findById(85L)).thenReturn(Optional.of(main));
+
+        productService.deleteProduct(85L);
+
+        assertThat(main.isPublished()).isFalse();
+        verify(productRepository).save(main);
+    }
+
+    @Test
+    void getProductsByBrand_BrandNotFound_ThrowsNotFoundException() {
+        when(brandRepository.findBySlug("missing-brand")).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> productService.getProductsByBrand("missing-brand"));
+    }
+
+    @Test
+    void getProductsByBrand_Success_ReturnsThumbnailVm() {
+        Brand brand = new Brand();
+        brand.setId(1L);
+        brand.setSlug("nike");
+        Product p = Product.builder().id(86L).name("Shoe").slug("shoe").thumbnailMediaId(860L).build();
+
+        when(brandRepository.findBySlug("nike")).thenReturn(Optional.of(brand));
+        when(productRepository.findAllByBrandAndIsPublishedTrueOrderByIdAsc(brand)).thenReturn(List.of(p));
+        when(mediaService.getMedia(860L)).thenReturn(new NoFileMediaVm(860L, "", "", "", "http://img-860"));
+
+        var result = productService.getProductsByBrand("nike");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().slug()).isEqualTo("shoe");
+    }
+
+    @Test
+    void getProductById_NotFound_ThrowsNotFoundException() {
+        when(productRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> productService.getProductById(999L));
+    }
+
+    @Test
+    void getProductById_WithImagesAndBrand_ReturnsDetailVm() {
+        Brand brand = new Brand();
+        brand.setId(11L);
+
+        Category category = new Category();
+        category.setId(12L);
+
+        ProductCategory productCategory = ProductCategory.builder().category(category).build();
+        Product product = Product.builder()
+            .id(87L)
+            .name("P87")
+            .slug("p87")
+            .brand(brand)
+            .thumbnailMediaId(870L)
+            .productImages(List.of(ProductImage.builder().imageId(871L).build()))
+            .productCategories(List.of(productCategory))
+            .build();
+
+        when(productRepository.findById(87L)).thenReturn(Optional.of(product));
+        when(mediaService.getMedia(870L)).thenReturn(new NoFileMediaVm(870L, "", "", "", "http://thumb-870"));
+        when(mediaService.getMedia(871L)).thenReturn(new NoFileMediaVm(871L, "", "", "", "http://img-871"));
+
+        var result = productService.getProductById(87L);
+
+        assertThat(result.id()).isEqualTo(87L);
+        assertThat(result.brandId()).isEqualTo(11L);
+        assertThat(result.productImageMedias()).hasSize(1);
+    }
+
+    @Test
+    void getProductCheckoutList_WithThumbnailAndWithoutThumbnail() {
+        Product p1 = Product.builder().id(88L).name("P88").slug("p88").thumbnailMediaId(880L).price(20.0).build();
+        Product p2 = Product.builder().id(89L).name("P89").slug("p89").thumbnailMediaId(890L).price(30.0).build();
+        Page<Product> page = new PageImpl<>(List.of(p1, p2), PageRequest.of(0, 10), 2);
+
+        when(productRepository.findAllPublishedProductsByIds(anyList(), any())).thenReturn(page);
+        when(mediaService.getMedia(880L)).thenReturn(new NoFileMediaVm(880L, "", "", "", "http://thumb-880"));
+        when(mediaService.getMedia(890L)).thenReturn(new NoFileMediaVm(890L, "", "", "", ""));
+
+        var result = productService.getProductCheckoutList(0, 10, List.of(88L, 89L));
+
+        assertThat(result.productCheckoutListVms()).hasSize(2);
+        assertThat(result.productCheckoutListVms().getFirst().thumbnailUrl()).isEqualTo("http://thumb-880");
+        assertThat(result.productCheckoutListVms().get(1).thumbnailUrl()).isNull();
     }
 }
