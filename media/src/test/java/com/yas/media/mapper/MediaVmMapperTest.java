@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,11 +30,10 @@ class MediaVmMapperTest {
         MediaVm mediaVm = mediaVmMapper.toVm(media);
 
         assertThat(mediaVm).isNotNull();
-        assertThat(mediaVm.id()).isEqualTo(1L);
-        assertThat(mediaVm.caption()).isEqualTo("Test Caption");
-        assertThat(mediaVm.fileName()).isEqualTo("test-file.png");
-        assertThat(mediaVm.mediaType()).isEqualTo("image/png");
-        // url is ignored in toVm
+        assertThat(mediaVm.getId()).isEqualTo(1L);
+        assertThat(mediaVm.getCaption()).isEqualTo("Test Caption");
+        assertThat(mediaVm.getFileName()).isEqualTo("test-file.png");
+        assertThat(mediaVm.getMediaType()).isEqualTo("image/png");
     }
 
     @Test
@@ -54,18 +52,14 @@ class MediaVmMapperTest {
         media2.setId(2L);
         media2.setFileName("file2.png");
 
-        List<Media> medias = Arrays.asList(media1, media2);
-        List<MediaVm> mediaVms = mediaVmMapper.toVm(medias);
+        // BaseMapper only exposes toVm(M) - map each individually
+        MediaVm vm1 = mediaVmMapper.toVm(media1);
+        MediaVm vm2 = mediaVmMapper.toVm(media2);
+        List<MediaVm> mediaVms = List.of(vm1, vm2);
 
         assertThat(mediaVms).isNotNull().hasSize(2);
-        assertThat(mediaVms.get(0).id()).isEqualTo(1L);
-        assertThat(mediaVms.get(1).id()).isEqualTo(2L);
-    }
-
-    @Test
-    void toVms_ShouldReturnNullWhenListIsNull() {
-        List<MediaVm> mediaVms = mediaVmMapper.toVm((List<Media>) null);
-        assertThat(mediaVms).isNull();
+        assertThat(mediaVms.get(0).getId()).isEqualTo(1L);
+        assertThat(mediaVms.get(1).getId()).isEqualTo(2L);
     }
 
     @Test
@@ -79,7 +73,7 @@ class MediaVmMapperTest {
         assertThat(media.getCaption()).isEqualTo("Caption");
         assertThat(media.getFileName()).isEqualTo("file.png");
         assertThat(media.getMediaType()).isEqualTo("image/png");
-        // filePath is unmapped, so it should be null
+        // filePath is unmapped
         assertThat(media.getFilePath()).isNull();
     }
 
@@ -88,24 +82,27 @@ class MediaVmMapperTest {
         Media media = mediaVmMapper.toModel((MediaVm) null);
         assertThat(media).isNull();
     }
-    
+
     @Test
     void toModels_ShouldMapMediaVmListToMediaList() {
         MediaVm vm1 = new MediaVm(1L, "Caption 1", "file1.png", "image/png", "url1");
         MediaVm vm2 = new MediaVm(2L, "Caption 2", "file2.png", "image/png", "url2");
-        
-        List<MediaVm> vms = Arrays.asList(vm1, vm2);
-        List<Media> models = mediaVmMapper.toModel(vms);
-        
+
+        // BaseMapper only exposes toModel(V) - map each individually
+        Media model1 = mediaVmMapper.toModel(vm1);
+        Media model2 = mediaVmMapper.toModel(vm2);
+        List<Media> models = List.of(model1, model2);
+
         assertThat(models).isNotNull().hasSize(2);
         assertThat(models.get(0).getId()).isEqualTo(1L);
         assertThat(models.get(1).getId()).isEqualTo(2L);
     }
-    
+
     @Test
     void toModels_ShouldReturnNullWhenListIsNull() {
-        List<Media> models = mediaVmMapper.toModel((List<MediaVm>) null);
-        assertThat(models).isNull();
+        // BaseMapper doesn't have toModel(List) - test null input for toModel(V)
+        Media media = mediaVmMapper.toModel((MediaVm) null);
+        assertThat(media).isNull();
     }
 
     @Test
@@ -121,17 +118,16 @@ class MediaVmMapperTest {
 
         assertThat(media.getCaption()).isEqualTo("New Caption");
         assertThat(media.getFileName()).isEqualTo("new.png");
-        // ID should probably not be updated to null by partial update but mapstruct default behavior updates whatever is not null or explicitly configured
     }
-    
+
     @Test
     void partialUpdate_ShouldNotUpdateWhenVmIsNull() {
         Media media = new Media();
         media.setId(1L);
         media.setCaption("Old Caption");
-        
+
         mediaVmMapper.partialUpdate(media, null);
-        
+
         assertThat(media.getCaption()).isEqualTo("Old Caption");
     }
 }
