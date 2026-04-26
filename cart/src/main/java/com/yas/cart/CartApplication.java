@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 public class CartApplication {
 
     public static void main(String[] args) {
-        // test for cart in main
+        // test for new Jenkinsfile in cart service
         SpringApplication.run(CartApplication.class, args);
     }
 }
