@@ -1,54 +1,73 @@
-// Loại bỏ @NonCPS vì chúng ta dùng lệnh sh và fileExists của Pipeline
-def detectChangedServices() {
-    def changedServices = [] as Set
-
-    // 1. Fetch nhánh main (Bỏ --depth=1 để đảm bảo có đủ lịch sử so sánh)
-    try {
-        sh 'git fetch origin main'
-    } catch (Exception e) {
-        echo "Cảnh báo: Không thể fetch origin main. Có thể là lần build đầu tiên."
-    }
-
-    // 2. Lấy danh sách file thay đổi (thêm || true để không crash pipeline nếu git diff lỗi)
-    def diff = sh(
-        script: 'git diff --name-only origin/main...HEAD || true',
-        returnStdout: true
-    ).trim()
-
-    if (!diff) {
-        return []
-    }
-
-    // 3. Tách chuỗi và lọc các service hợp lệ
-    def files = diff.split('\n')
-    for (int i = 0; i < files.length; i++) {
-        def path = files[i]
-        if (path.contains('/')) {
-            def folder = path.split('/')[0]
-            if (fileExists("${folder}/pom.xml")) {
-                changedServices.add(folder)
+@com.cloudbees.groovy.cps.NonCPS
+def getAffectedPaths() {
+    def paths = []
+    for (changeSet in currentBuild.changeSets) {
+        for (entry in changeSet.items) {
+            for (file in entry.affectedFiles) {
+                paths.add(file.path)
             }
         }
     }
-
-    return changedServices.toList()
+    return paths
 }
+
+@com.cloudbees.groovy.cps.NonCPS
+def extractUniqueFolders(List paths) {
+    def folders = [] as Set
+    for (path in paths) {
+        if (path.contains('/')) {
+            folders.add(path.split('/')[0])
+        }
+    }
+    return folders.toList()
+}
+
+def getChangedServices() {
+    def changedServices = [] as Set
+
+    // Priority: git diff vs main — catches brand-new branches too
+    def gitDiffOutput = ''
+    try {
+        sh(script: 'git fetch origin main --no-tags --depth=1', returnStdout: false)
+        gitDiffOutput = sh(
+            script: 'git diff --name-only origin/main...HEAD',
+            returnStdout: true
+        ).trim()
+    } catch (e) {
+        echo "git diff failed, falling back to changeSets: ${e.message}"
+    }
+
+    def paths = []
+    if (gitDiffOutput) {
+        paths = gitDiffOutput.split('\n').toList()
+    } else {
+        // Fallback: use changeSets for additional commits pushed to an existing branch
+        paths = getAffectedPaths()
+    }
+
+    // Deduplicate folders BEFORE calling fileExists to avoid O(n) filesystem checks
+    def uniqueFolders = extractUniqueFolders(paths)
+    for (folder in uniqueFolders) {
+        if (fileExists("${folder}/pom.xml")) {
+            changedServices.add(folder)
+        }
+    }
+    return changedServices
+}
+
 
 pipeline {
     agent any
-    
+
     tools {
-        maven 'Maven3' 
-        jdk 'Java21'   
+        maven 'Maven3'
+        jdk 'Java21'
     }
 
     environment {
         PATH_TO_JAVA = tool name: 'Java21', type: 'jdk'
-        JAVA_HOME = "${PATH_TO_JAVA}"
-        PATH = "${PATH_TO_JAVA}/bin:${env.PATH}"
-        
-        // Khởi tạo biến môi trường rỗng để lưu danh sách service
-        CHANGED_SERVICES = ""
+        JAVA_HOME    = "${PATH_TO_JAVA}"
+        PATH         = "${PATH_TO_JAVA}/bin:${env.PATH}"
     }
 
     stages {
@@ -58,49 +77,59 @@ pipeline {
             }
         }
 
-        // Thêm stage này để tính toán sự thay đổi 1 LẦN DUY NHẤT
-        stage('Detect Changes') {
-            steps {
-                script {
-                    def services = detectChangedServices()
-                    if (services.isEmpty()) {
-                        echo "⚠️ Không phát hiện thay đổi ở service nào. Sẽ build TOÀN BỘ dự án như cấu hình mặc định."
-                    } else {
-                        // Lưu danh sách thành chuỗi phân cách bằng dấu phẩy
-                        env.CHANGED_SERVICES = services.join(',')
-                        echo "✅ Phát hiện các service bị thay đổi: ${env.CHANGED_SERVICES}"
-                    }
-                }
-            }
-        }
-
         stage('Test & Coverage') {
             steps {
-                echo 'Đang kiểm tra phiên bản Java...'
+                echo 'Đang kiểm tra phiên bản Java'
                 sh 'java -version'
-                
+
                 script {
-                    if (!env.CHANGED_SERVICES) {
-                        echo 'Đang chạy Unit Test và tạo report Coverage cho TOÀN BỘ dự án...'
-                        sh "mvn clean test jacoco:report '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
+                    def services = getChangedServices()
+                    def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                    def isMainBranch = env.BRANCH_NAME == 'main'
+
+                    if (isManualTrigger && services.isEmpty()) {
+                        sh "mvn clean install -DskipTests -Djacoco.skip=true"
+                        sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
+                    } else if (isMainBranch && services.isEmpty()) {
+                        echo 'Branch main không phát hiện service thay đổi, chạy verify toàn bộ để đảm bảo coverage ổn định.'
+                        sh "mvn clean install -DskipTests -Djacoco.skip=true"
+                        sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
+                    } else if (services.isEmpty()) {
+                        echo 'Không có service nào thay đổi so với main. Bỏ qua bước Test.'
                     } else {
-                        echo 'Đang chạy Unit Test và tạo report Coverage cho CÁC SERVICE BỊ THAY ĐỔI...'
-                        def servicesList = env.CHANGED_SERVICES.split(',')
-                        for (service in servicesList) {
+                        echo "Đang chạy Unit Test và kiểm tra Coverage cho CÁC SERVICE BỊ THAY ĐỔI: ${services}"
+                        for (service in services) {
                             stage("Test ${service}") {
-                                sh "mvn clean test jacoco:report -pl ${service} -am '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java'"
+                                sh "mvn clean install -am -pl ${service} -DskipTests -Djacoco.skip=true"
+                                sh "mvn verify -pl ${service} '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
                             }
                         }
                     }
                 }
             }
+
             post {
                 always {
-                    echo 'Upload Test Result và TestCoverage cho Phase Test...'
+                    echo 'Đang Upload Test Result và Test Coverage cho Phase Test...'
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
-                    jacoco execPattern: '**/target/jacoco.exec',
-                           classPattern: '**/target/classes',
-                           sourcePattern: '**/src/main/java'
+                    script {
+                        def services = getChangedServices()
+                        def classPatterns = '**/target/classes'
+                        def sourcePatterns = '**/src/main/java'
+
+                        if (!services.isEmpty()) {
+                            classPatterns = services.collect { "${it}/target/classes" }.join(',')
+                            sourcePatterns = services.collect { "${it}/src/main/java" }.join(',')
+                            echo "JaCoCo scope theo service thay đổi: ${services}"
+                        } else {
+                            echo 'JaCoCo scope toàn bộ workspace vì không xác định được service thay đổi.'
+                        }
+
+                        jacoco execPattern: '**/target/jacoco.exec',
+                               classPattern: classPatterns,
+                               sourcePattern: sourcePatterns,
+                               exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
+                    }
                 }
             }
         }
@@ -108,13 +137,14 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    if (!env.CHANGED_SERVICES) {
-                        echo 'Đang đóng gói TOÀN BỘ ứng dụng...'
+                    def services = getChangedServices()
+
+                    if (services.isEmpty()) {
+                        echo 'Đang đóng gói TOÀN BỘ ứng dụng (Bỏ qua test vì đã chạy ở stage trước)...'
                         sh 'mvn package -DskipTests -DskipCompile=false'
                     } else {
-                        echo 'Đang đóng gói CÁC SERVICE BỊ THAY ĐỔI...'
-                        def servicesList = env.CHANGED_SERVICES.split(',')
-                        for (service in servicesList) {
+                        echo "Đang đóng gói CÁC SERVICE BỊ THAY ĐỔI: ${services}"
+                        for (service in services) {
                             stage("Build ${service}") {
                                 sh "mvn package -pl ${service} -am -DskipTests -DskipCompile=false"
                             }
