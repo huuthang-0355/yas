@@ -85,8 +85,13 @@ pipeline {
                 script {
                     def services = getChangedServices()
                     def isManualTrigger = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                    def isMainBranch = env.BRANCH_NAME == 'main'
 
                     if (isManualTrigger && services.isEmpty()) {
+                        sh "mvn clean install -DskipTests -Djacoco.skip=true"
+                        sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
+                    } else if (isMainBranch && services.isEmpty()) {
+                        echo 'Branch main không phát hiện service thay đổi, chạy verify toàn bộ để đảm bảo coverage ổn định.'
                         sh "mvn clean install -DskipTests -Djacoco.skip=true"
                         sh "mvn verify '-Dsurefire.excludes=**/*IT.java,**/*IT\$*.java,**/ProductCdcConsumerTest.java,**/ProductVectorRepositoryTest.java,**/VectorQueryTest.java' '-Dfailsafe.excludes=**/*IT.java,**/*IT\$*.java'"
                     } else if (services.isEmpty()) {
@@ -107,10 +112,24 @@ pipeline {
                 always {
                     echo 'Đang Upload Test Result và Test Coverage cho Phase Test...'
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
-                    jacoco execPattern: '**/target/jacoco.exec',
-                           classPattern: '**/target/classes',
-                           sourcePattern: '**/src/main/java',
-                           exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
+                    script {
+                        def services = getChangedServices()
+                        def classPatterns = '**/target/classes'
+                        def sourcePatterns = '**/src/main/java'
+
+                        if (!services.isEmpty()) {
+                            classPatterns = services.collect { "${it}/target/classes" }.join(',')
+                            sourcePatterns = services.collect { "${it}/src/main/java" }.join(',')
+                            echo "JaCoCo scope theo service thay đổi: ${services}"
+                        } else {
+                            echo 'JaCoCo scope toàn bộ workspace vì không xác định được service thay đổi.'
+                        }
+
+                        jacoco execPattern: '**/target/jacoco.exec',
+                               classPattern: classPatterns,
+                               sourcePattern: sourcePatterns,
+                               exclusionPattern: '**/*Application.class,**/config/**,**/exception/**,**/constants/**,**/mapper/**,**/model/**,**/dto/**,**/viewmodel/**'
+                    }
                 }
             }
         }
