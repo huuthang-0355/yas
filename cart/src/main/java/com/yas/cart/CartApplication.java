@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 public class CartApplication {
 
     public static void main(String[] args) {
-        // test for cart
+        // test for cart ...
         SpringApplication.run(CartApplication.class, args);
     }
 }
