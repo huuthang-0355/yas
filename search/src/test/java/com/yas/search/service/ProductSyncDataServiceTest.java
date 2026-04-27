@@ -219,6 +219,17 @@ class ProductSyncDataServiceTest {
         verify(productRepository).deleteById(id);
     }
 
+    @Test
+    void testDeleteProduct_whenProductDoesNotExist_doesNothing() {
+        Long id = 2L;
+
+        when(productRepository.existsById(id)).thenReturn(false);
+
+        productSyncDataService.deleteProduct(id);
+
+        verify(productRepository, never()).deleteById(id);
+    }
+
     @Disabled
     @Test
     void testDeleteProduct_whenProductDoesNotExist_throwsNotFoundException() {
