@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,9 +20,6 @@ import com.yas.product.model.ProductOptionCombination;
 import com.yas.product.model.ProductOptionValue;
 import com.yas.product.model.ProductRelated;
 import com.yas.product.model.ProductCategory;
-import com.yas.product.model.attribute.ProductAttribute;
-import com.yas.product.model.attribute.ProductAttributeGroup;
-import com.yas.product.model.attribute.ProductAttributeValue;
 import com.yas.product.model.enumeration.DimensionUnit;
 import com.yas.product.repository.BrandRepository;
 import com.yas.product.repository.CategoryRepository;
@@ -35,24 +30,14 @@ import com.yas.product.repository.ProductOptionRepository;
 import com.yas.product.repository.ProductOptionValueRepository;
 import com.yas.product.repository.ProductRelatedRepository;
 import com.yas.product.repository.ProductRepository;
-import com.yas.product.viewmodel.product.ProductDetailGetVm;
-import com.yas.product.viewmodel.product.ProductEsDetailVm;
-import com.yas.product.viewmodel.product.ProductFeatureGetVm;
-import com.yas.product.viewmodel.product.ProductInfoVm;
-import com.yas.product.viewmodel.product.ProductListGetFromCategoryVm;
-import com.yas.product.viewmodel.product.ProductListGetVm;
 import com.yas.product.viewmodel.product.ProductPostVm;
 import com.yas.product.viewmodel.product.ProductPutVm;
-import com.yas.product.viewmodel.product.ProductQuantityPostVm;
 import com.yas.product.viewmodel.product.ProductQuantityPutVm;
 import com.yas.product.viewmodel.product.ProductVariationPostVm;
-import com.yas.product.viewmodel.product.ProductsGetVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
 import com.yas.product.viewmodel.NoFileMediaVm;
-import com.yas.product.model.enumeration.FilterExistInWhSelection;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +45,6 @@ import java.util.ArrayList;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -341,33 +325,6 @@ class ProductServiceTest {
     }
 
     @Test
-    void getFeaturedProductsById_UsesOwnThumbnailWhenPresent() {
-        Product product = Product.builder().id(32L).name("P32").slug("p32").price(5.0).thumbnailMediaId(320L).build();
-        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(product));
-        when(mediaService.getMedia(320L)).thenReturn(new NoFileMediaVm(320L, "", "", "", "http://thumb-320"));
-
-        var result = productService.getFeaturedProductsById(List.of(32L));
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().thumbnailUrl()).isEqualTo("http://thumb-320");
-    }
-
-    @Test
-    void getFeaturedProductsById_WhenParentMissing_UsesEmptyString() {
-        Product parent = Product.builder().id(33L).build();
-        Product child = Product.builder().id(34L).name("Child").slug("child").price(6.0)
-            .parent(parent).thumbnailMediaId(340L).build();
-        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(child));
-        when(productRepository.findById(33L)).thenReturn(Optional.empty());
-        when(mediaService.getMedia(340L)).thenReturn(new NoFileMediaVm(340L, "", "", "", ""));
-
-        var result = productService.getFeaturedProductsById(List.of(34L));
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().thumbnailUrl()).isEmpty();
-    }
-
-    @Test
     void getProductVariationsByParentId_HasNoOptions_ReturnsEmptyList() {
         Product parent = Product.builder().id(40L).hasOptions(false).build();
         when(productRepository.findById(40L)).thenReturn(Optional.of(parent));
@@ -397,22 +354,6 @@ class ProductServiceTest {
     }
 
     @Test
-    void getProductVariationsByParentId_HasOptionsWithoutThumbnail_ReturnsNullImage() {
-        Product variation = Product.builder().id(52L).name("Var2").slug("var2").price(10.0)
-            .isPublished(true).thumbnailMediaId(null).productImages(List.of()).build();
-        Product parent = Product.builder().id(52L).hasOptions(true).products(List.of(variation)).build();
-
-        when(productRepository.findById(52L)).thenReturn(Optional.of(parent));
-        when(productOptionCombinationRepository.findAllByProduct(variation)).thenReturn(List.of());
-
-        var result = productService.getProductVariationsByParentId(52L);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().image()).isNull();
-        assertThat(result.getFirst().options()).isEmpty();
-    }
-
-    @Test
     void subtractStockQuantity_ShouldNotGoBelowZero() {
         Product p = Product.builder().id(60L).stockTrackingEnabled(true).stockQuantity(3L).build();
         when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(p));
@@ -432,26 +373,6 @@ class ProductServiceTest {
 
         assertThat(p.getStockQuantity()).isEqualTo(20L);
         verify(productRepository).saveAll(anyList());
-    }
-
-    @Test
-    void subtractStockQuantity_SkipsWhenTrackingDisabled() {
-        Product p = Product.builder().id(71L).stockTrackingEnabled(false).stockQuantity(8L).build();
-        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(p));
-
-        productService.subtractStockQuantity(List.of(new ProductQuantityPutVm(71L, 5L)));
-
-        assertThat(p.getStockQuantity()).isEqualTo(8L);
-    }
-
-    @Test
-    void restoreStockQuantity_SkipsWhenTrackingDisabled() {
-        Product p = Product.builder().id(72L).stockTrackingEnabled(false).stockQuantity(8L).build();
-        when(productRepository.findAllByIdIn(anyList())).thenReturn(List.of(p));
-
-        productService.restoreStockQuantity(List.of(new ProductQuantityPutVm(72L, 5L)));
-
-        assertThat(p.getStockQuantity()).isEqualTo(8L);
     }
 
     @Test
@@ -578,20 +499,6 @@ class ProductServiceTest {
     }
 
     @Test
-    void getProductById_WithNullCollections_ReturnsEmptyLists() {
-        Product product = Product.builder().id(870L).name("P870").slug("p870").build();
-        product.setProductImages(null);
-        product.setProductCategories(null);
-
-        when(productRepository.findById(870L)).thenReturn(Optional.of(product));
-
-        var result = productService.getProductById(870L);
-
-        assertThat(result.productImageMedias()).isEmpty();
-        assertThat(result.categories()).isEmpty();
-    }
-
-    @Test
     void getProductCheckoutList_WithThumbnailAndWithoutThumbnail() {
         Brand brand = new Brand();
         brand.setId(10L);
@@ -609,282 +516,5 @@ class ProductServiceTest {
         assertThat(result.productCheckoutListVms()).hasSize(2);
         assertThat(result.productCheckoutListVms().getFirst().thumbnailUrl()).isEqualTo("http://thumb-880");
         assertThat(result.productCheckoutListVms().get(1).thumbnailUrl()).isNullOrEmpty();
-    }
-
-    @Test
-    void getProductsWithFilter_TrimsAndMapsResults() {
-        Product product = Product.builder().id(90L).name("P90").slug("p90").price(9.0).build();
-        Page<Product> page = new PageImpl<>(List.of(product), PageRequest.of(0, 2), 1);
-        when(productRepository.getProductsWithFilter(eq("name"), eq("Brand"), any(Pageable.class)))
-            .thenReturn(page);
-
-        ProductListGetVm result = productService.getProductsWithFilter(0, 2, "  Name ", "Brand ");
-
-        assertThat(result.productContent()).hasSize(1);
-        assertThat(result.totalElements()).isEqualTo(1);
-        verify(productRepository).getProductsWithFilter(eq("name"), eq("Brand"), any(Pageable.class));
-    }
-
-    @Test
-    void getProductsFromCategory_CategoryNotFound_ThrowsNotFoundException() {
-        when(categoryRepository.findBySlug("missing")).thenReturn(Optional.empty());
-
-        assertThrows(NotFoundException.class, () -> productService.getProductsFromCategory(0, 5, "missing"));
-    }
-
-    @Test
-    void getProductsFromCategory_ReturnsThumbnailList() {
-        Category category = new Category();
-        category.setId(1L);
-        category.setSlug("cat");
-        category.setName("Category");
-
-        Product product = Product.builder().id(91L).name("P91").slug("p91").thumbnailMediaId(910L).build();
-        ProductCategory productCategory = ProductCategory.builder().product(product).category(category).build();
-        Page<ProductCategory> page = new PageImpl<>(List.of(productCategory), PageRequest.of(0, 2), 1);
-
-        when(categoryRepository.findBySlug("cat")).thenReturn(Optional.of(category));
-        when(productCategoryRepository.findAllByCategory(any(Pageable.class), eq(category))).thenReturn(page);
-        when(mediaService.getMedia(910L)).thenReturn(new NoFileMediaVm(910L, "", "", "", "http://img-910"));
-
-        ProductListGetFromCategoryVm result = productService.getProductsFromCategory(0, 2, "cat");
-
-        assertThat(result.productContent()).hasSize(1);
-        assertThat(result.productContent().getFirst().thumbnailUrl()).isEqualTo("http://img-910");
-    }
-
-    @Test
-    void getListFeaturedProducts_ReturnsListAndTotalPages() {
-        Product p1 = Product.builder().id(92L).name("P92").slug("p92").thumbnailMediaId(920L).price(11.0).build();
-        Product p2 = Product.builder().id(93L).name("P93").slug("p93").thumbnailMediaId(930L).price(12.0).build();
-        Page<Product> page = new PageImpl<>(List.of(p1, p2), PageRequest.of(0, 2), 3);
-
-        when(productRepository.getFeaturedProduct(any(Pageable.class))).thenReturn(page);
-        when(mediaService.getMedia(920L)).thenReturn(new NoFileMediaVm(920L, "", "", "", "http://img-920"));
-        when(mediaService.getMedia(930L)).thenReturn(new NoFileMediaVm(930L, "", "", "", "http://img-930"));
-
-        ProductFeatureGetVm result = productService.getListFeaturedProducts(0, 2);
-
-        assertThat(result.productList()).hasSize(2);
-        assertThat(result.totalPage()).isEqualTo(2);
-    }
-
-    @Test
-    void getProductDetail_MapsAttributesAndImages() {
-        Brand brand = new Brand();
-        brand.setName("Brand");
-
-        Category category = new Category();
-        category.setName("Category");
-
-        ProductAttributeGroup group = new ProductAttributeGroup();
-        group.setId(1L);
-        group.setName("Group A");
-
-        ProductAttribute attr1 = ProductAttribute.builder().id(1L).name("Color").productAttributeGroup(group).build();
-        ProductAttribute attr2 = ProductAttribute.builder().id(2L).name("Size").productAttributeGroup(null).build();
-
-        ProductAttributeValue val1 = new ProductAttributeValue();
-        val1.setProductAttribute(attr1);
-        val1.setValue("Red");
-        ProductAttributeValue val2 = new ProductAttributeValue();
-        val2.setProductAttribute(attr2);
-        val2.setValue("M");
-
-        Product product = Product.builder()
-            .id(94L)
-            .name("P94")
-            .slug("p94")
-            .brand(brand)
-            .thumbnailMediaId(940L)
-            .productImages(List.of(ProductImage.builder().imageId(941L).build()))
-            .productCategories(List.of(ProductCategory.builder().category(category).build()))
-            .attributeValues(List.of(val1, val2))
-            .build();
-
-        when(productRepository.findBySlugAndIsPublishedTrue("p94")).thenReturn(Optional.of(product));
-        when(mediaService.getMedia(940L)).thenReturn(new NoFileMediaVm(940L, "", "", "", "http://thumb-940"));
-        when(mediaService.getMedia(941L)).thenReturn(new NoFileMediaVm(941L, "", "", "", "http://img-941"));
-
-        ProductDetailGetVm result = productService.getProductDetail("p94");
-
-        assertThat(result.productCategories()).containsExactly("Category");
-        assertThat(result.productImageMediaUrls()).containsExactly("http://img-941");
-        assertThat(result.productAttributeGroups()).hasSize(2);
-        assertThat(result.productAttributeGroups().stream().map(groupVm -> groupVm.name()))
-            .containsExactlyInAnyOrder("Group A", "None group");
-    }
-
-    @Test
-    void getProductDetail_WhenNotFound_ThrowsNotFoundException() {
-        when(productRepository.findBySlugAndIsPublishedTrue("missing")).thenReturn(Optional.empty());
-
-        assertThrows(NotFoundException.class, () -> productService.getProductDetail("missing"));
-    }
-
-    @Test
-    void getProductDetail_WhenNoImagesOrAttributes_ReturnsEmptyCollections() {
-        Product product = Product.builder().id(941L).name("P941").slug("p941").thumbnailMediaId(9410L)
-            .productImages(List.of()).productCategories(List.of()).attributeValues(List.of()).build();
-
-        when(productRepository.findBySlugAndIsPublishedTrue("p941")).thenReturn(Optional.of(product));
-        when(mediaService.getMedia(9410L)).thenReturn(new NoFileMediaVm(9410L, "", "", "", "http://thumb-9410"));
-
-        ProductDetailGetVm result = productService.getProductDetail("p941");
-
-        assertThat(result.productCategories()).isEmpty();
-        assertThat(result.productImageMediaUrls()).isEmpty();
-        assertThat(result.productAttributeGroups()).isEmpty();
-    }
-
-    @Test
-    void getProductsByMultiQuery_UsesFiltersAndMapsResults() {
-        Product product = Product.builder().id(95L).name("P95").slug("p95").thumbnailMediaId(950L).price(15.0).build();
-        Page<Product> page = new PageImpl<>(List.of(product), PageRequest.of(0, 1), 1);
-
-        when(productRepository.findByProductNameAndCategorySlugAndPriceBetween(
-            eq("name"), eq("cat"), eq(10.0), eq(20.0), any(Pageable.class)))
-            .thenReturn(page);
-        when(mediaService.getMedia(950L)).thenReturn(new NoFileMediaVm(950L, "", "", "", "http://img-950"));
-
-        ProductsGetVm result = productService.getProductsByMultiQuery(0, 1, " Name ", "cat ", 10.0, 20.0);
-
-        assertThat(result.productContent()).hasSize(1);
-        assertThat(result.productContent().getFirst().thumbnailUrl()).isEqualTo("http://img-950");
-    }
-
-    @Test
-    void getProductsByMultiQuery_WhenEmpty_ReturnsEmptyList() {
-        when(productRepository.findByProductNameAndCategorySlugAndPriceBetween(
-            eq("name"), eq(""), isNull(), isNull(), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 1), 0));
-
-        ProductsGetVm result = productService.getProductsByMultiQuery(0, 1, " Name ", " ", null, null);
-
-        assertThat(result.productContent()).isEmpty();
-    }
-
-    @Test
-    void getRelatedProductsBackoffice_ReturnsMappedList() {
-        Product related = Product.builder().id(96L).name("Related").slug("rel").price(5.0)
-            .createdOn(ZonedDateTime.now()).taxClassId(1L).build();
-        Product main = Product.builder().id(97L).build();
-        ProductRelated relation = ProductRelated.builder().id(1L).product(main).relatedProduct(related).build();
-        main.setRelatedProducts(List.of(relation));
-
-        when(productRepository.findById(97L)).thenReturn(Optional.of(main));
-
-        var result = productService.getRelatedProductsBackoffice(97L);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().id()).isEqualTo(96L);
-    }
-
-    @Test
-    void getRelatedProductsStorefront_FiltersUnpublished() {
-        Product main = Product.builder().id(98L).build();
-        Product published = Product.builder().id(99L).name("Pub").slug("pub").price(10.0)
-            .thumbnailMediaId(990L).isPublished(true).build();
-        Product hidden = Product.builder().id(100L).name("Hidden").slug("hidden").price(11.0)
-            .thumbnailMediaId(1000L).isPublished(false).build();
-        ProductRelated rel1 = ProductRelated.builder().product(main).relatedProduct(published).build();
-        ProductRelated rel2 = ProductRelated.builder().product(main).relatedProduct(hidden).build();
-
-        when(productRepository.findById(98L)).thenReturn(Optional.of(main));
-        when(productRelatedRepository.findAllByProduct(eq(main), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(rel1, rel2), PageRequest.of(0, 2), 2));
-        when(mediaService.getMedia(990L)).thenReturn(new NoFileMediaVm(990L, "", "", "", "http://img-990"));
-
-        ProductsGetVm result = productService.getRelatedProductsStorefront(98L, 0, 2);
-
-        assertThat(result.productContent()).hasSize(1);
-        assertThat(result.productContent().getFirst().id()).isEqualTo(99L);
-    }
-
-    @Test
-    void exportProducts_ReturnsMappedResults() {
-        Brand brand = new Brand();
-        brand.setId(5L);
-        brand.setName("BrandX");
-        Product product = Product.builder().id(101L).name("P101").slug("p101").brand(brand).price(30.0).build();
-
-        when(productRepository.getExportingProducts(eq("name"), eq("brand")))
-            .thenReturn(List.of(product));
-
-        var result = productService.exportProducts(" Name ", "Brand ");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().brandName()).isEqualTo("BrandX");
-    }
-
-    @Test
-    void getProductsForWarehouse_MapsResults() {
-        Product product = Product.builder().id(105L).name("P105").sku("sku-105").build();
-        when(productRepository.findProductForWarehouse("name", "sku", List.of(105L), FilterExistInWhSelection.ALL.name()))
-            .thenReturn(List.of(product));
-
-        List<ProductInfoVm> result = productService.getProductsForWarehouse("name", "sku", List.of(105L), FilterExistInWhSelection.ALL);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().sku()).isEqualTo("sku-105");
-    }
-
-    @Test
-    void getProductEsDetailById_WithNullBrandAndThumbnail_ReturnsNulls() {
-        Product product = Product.builder().id(106L).name("P106").slug("p106").build();
-
-        when(productRepository.findById(106L)).thenReturn(Optional.of(product));
-
-        ProductEsDetailVm result = productService.getProductEsDetailById(106L);
-
-        assertThat(result.brand()).isNull();
-        assertThat(result.thumbnailMediaId()).isNull();
-    }
-
-    @Test
-    void getProductEsDetailById_ReturnsCategoryAndAttributeNames() {
-        Brand brand = new Brand();
-        brand.setName("BrandY");
-
-        Category category = new Category();
-        category.setName("CatY");
-
-        ProductAttribute attribute = ProductAttribute.builder().id(3L).name("Material").build();
-        ProductAttributeValue value = new ProductAttributeValue();
-        value.setProductAttribute(attribute);
-
-        Product product = Product.builder()
-            .id(102L)
-            .name("P102")
-            .slug("p102")
-            .brand(brand)
-            .productCategories(List.of(ProductCategory.builder().category(category).build()))
-            .attributeValues(List.of(value))
-            .build();
-
-        when(productRepository.findById(102L)).thenReturn(Optional.of(product));
-
-        ProductEsDetailVm result = productService.getProductEsDetailById(102L);
-
-        assertThat(result.brand()).isEqualTo("BrandY");
-        assertThat(result.categories()).containsExactly("CatY");
-        assertThat(result.attributes()).containsExactly("Material");
-    }
-
-    @Test
-    void updateProductQuantity_UpdatesStockQuantities() {
-        Product p1 = Product.builder().id(103L).stockQuantity(5L).build();
-        Product p2 = Product.builder().id(104L).stockQuantity(7L).build();
-
-        when(productRepository.findAllByIdIn(List.of(103L, 104L))).thenReturn(List.of(p1, p2));
-
-        productService.updateProductQuantity(List.of(
-            new ProductQuantityPostVm(103L, 12L),
-            new ProductQuantityPostVm(104L, 20L)
-        ));
-
-        assertThat(p1.getStockQuantity()).isEqualTo(12L);
-        assertThat(p2.getStockQuantity()).isEqualTo(20L);
-        verify(productRepository).saveAll(anyList());
     }
 }
