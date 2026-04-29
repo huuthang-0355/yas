@@ -627,4 +627,102 @@ class ProductServiceTest {
         // When & Then
         assertThrows(NotFoundException.class, () -> productService.getProductsByBrand(brandSlug));
     }
+
+    @Test
+    void getProductsWithFilter_whenFilterProvided_thenReturnProductList() {
+        Page<Product> productPage = new PageImpl<>(List.of(
+            Product.builder().id(1L).name("Test Product").slug("test-product").price(100.0).build()
+        ));
+        when(productRepository.getProductsWithFilter(anyString(), anyString(), any(PageRequest.class)))
+            .thenReturn(productPage);
+
+        var result = productService.getProductsWithFilter(0, 10, "Test", "TestBrand");
+
+        assertThat(result).isNotNull();
+        assertThat(result.productContent()).hasSize(1);
+        assertThat(result.productContent().get(0).name()).isEqualTo("Test Product");
+    }
+
+    @Test
+    void getProductDetail_whenSlugProvided_thenReturnProductDetail() {
+        Product product = Product.builder()
+            .id(1L)
+            .name("Test Product")
+            .slug("test-product")
+            .thumbnailMediaId(10L)
+            .price(100.0)
+            .build();
+            
+        when(productRepository.findBySlugAndIsPublishedTrue("test-product")).thenReturn(Optional.of(product));
+        when(mediaService.getMedia(10L)).thenReturn(new NoFileMediaVm(10L, "caption", "fileName", "mediaType", "http://image-url"));
+
+        var result = productService.getProductDetail("test-product");
+
+        assertThat(result).isNotNull();
+        assertThat(result.id()).isEqualTo(1L);
+        assertThat(result.name()).isEqualTo("Test Product");
+    }
+
+    @Test
+    void getProductDetail_whenProductNotFound_thenThrowNotFoundException() {
+        when(productRepository.findBySlugAndIsPublishedTrue("non-existent-product")).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> productService.getProductDetail("non-existent-product"));
+    }
+
+    @Test
+    void getProductsFromCategory_whenCategorySlugProvided_thenReturnProductList() {
+        Category category = new Category();
+        category.setId(1L);
+        category.setSlug("test-category");
+        
+        Product product = Product.builder().id(1L).name("Test Product").slug("test-product").thumbnailMediaId(10L).build();
+        ProductCategory productCategory = ProductCategory.builder().product(product).category(category).build();
+        
+        Page<ProductCategory> productCategoryPage = new PageImpl<>(List.of(productCategory));
+        when(categoryRepository.findBySlug("test-category")).thenReturn(Optional.of(category));
+        when(productCategoryRepository.findAllByCategory(any(PageRequest.class), any(Category.class)))
+            .thenReturn(productCategoryPage);
+        when(mediaService.getMedia(10L)).thenReturn(new NoFileMediaVm(10L, "caption", "fileName", "mediaType", "http://image-url"));
+
+        var result = productService.getProductsFromCategory(0, 10, "test-category");
+
+        assertThat(result).isNotNull();
+        assertThat(result.productContent()).hasSize(1);
+        assertThat(result.productContent().get(0).name()).isEqualTo("Test Product");
+    }
+
+    @Test
+    void getProductsByMultiQuery_whenCriteriaProvided_thenReturnProducts() {
+        Product product = Product.builder().id(1L).name("Test Product").slug("test-product").price(100.0).thumbnailMediaId(10L).build();
+        Page<Product> productPage = new PageImpl<>(List.of(product));
+        
+        when(productRepository.findByProductNameAndCategorySlugAndPriceBetween(anyString(), anyString(), any(), any(), any(PageRequest.class)))
+            .thenReturn(productPage);
+        when(mediaService.getMedia(10L)).thenReturn(new NoFileMediaVm(10L, "caption", "fileName", "mediaType", "http://image-url"));
+
+        var result = productService.getProductsByMultiQuery(0, 10, "Test", "slug", 0.0, 500.0);
+
+        assertThat(result).isNotNull();
+        assertThat(result.productContent()).hasSize(1);
+        assertThat(result.productContent().get(0).name()).isEqualTo("Test Product");
+    }
+
+    @Test
+    void getRelatedProductsStorefront_whenProductIdProvided_thenReturnRelatedProducts() {
+        Product product = Product.builder().id(1L).build();
+        Product relatedProduct = Product.builder().id(2L).name("Related Product").slug("related-product").thumbnailMediaId(10L).isPublished(true).build();
+        ProductRelated productRelated = ProductRelated.builder().product(product).relatedProduct(relatedProduct).build();
+        
+        Page<ProductRelated> relatedPage = new PageImpl<>(List.of(productRelated));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRelatedRepository.findAllByProduct(any(Product.class), any(PageRequest.class))).thenReturn(relatedPage);
+        when(mediaService.getMedia(10L)).thenReturn(new NoFileMediaVm(10L, "caption", "fileName", "mediaType", "http://image-url"));
+
+        var result = productService.getRelatedProductsStorefront(1L, 0, 10);
+
+        assertThat(result).isNotNull();
+        assertThat(result.productContent()).hasSize(1);
+        assertThat(result.productContent().get(0).name()).isEqualTo("Related Product");
+    }
 }

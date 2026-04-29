@@ -96,7 +96,7 @@
                         <exclude>com/yas/**/exception/**</exclude>
                         <exclude>com/yas/**/constants/**</exclude>
                         <exclude>com/yas/**/mapper/**</exclude>
-                        <exclude>com/yas/**/model/**</exclude>
+                        <exclude>com/yas/**/model/**</exclude><exclude>com/yas/**/enumeration/**</exclude>
                         <exclude>com/yas/**/dto/**</exclude>
                         <exclude>com/yas/**/viewmodel/**</exclude>
                     </excludes>
