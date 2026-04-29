@@ -602,7 +602,9 @@ class ProductServiceTest {
     void testGetProductsByBrand_WhenBrandFound_ShouldReturnProducts() {
         // Given
         String brandSlug = "test-brand";
-        Brand brand = Brand.builder().id(1L).slug(brandSlug).build();
+        Brand brand = new Brand();
+        brand.setId(1L);
+        brand.setSlug(brandSlug);
         Product product = Product.builder().id(1L).thumbnailMediaId(1L).brand(brand).build();
         when(brandRepository.findBySlug(brandSlug)).thenReturn(Optional.of(brand));
         when(productRepository.findAllByBrandAndIsPublishedTrueOrderByIdAsc(brand)).thenReturn(List.of(product));
