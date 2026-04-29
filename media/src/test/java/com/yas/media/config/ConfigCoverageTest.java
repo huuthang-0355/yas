@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.web.DefaultSecurityFilterChain;
 
 public class ConfigCoverageTest {
 
@@ -34,10 +36,21 @@ public class ConfigCoverageTest {
     void testSecurityConfig() throws Exception {
         SecurityConfig config = new SecurityConfig();
         HttpSecurity http = mock(HttpSecurity.class);
+        DefaultSecurityFilterChain filterChain = mock(DefaultSecurityFilterChain.class);
+        
         when(http.authorizeHttpRequests(any())).thenReturn(http);
         when(http.oauth2ResourceServer(any())).thenReturn(http);
+        when(http.build()).thenReturn(filterChain);
 
-        assertNotNull(config.filterChain(http));
-        assertNotNull(config.jwtAuthenticationConverterForKeycloak());
+        assertEquals(filterChain, config.filterChain(http));
+        
+        var converter = config.jwtAuthenticationConverterForKeycloak();
+        assertNotNull(converter);
+        
+        Jwt jwt = mock(Jwt.class);
+        java.util.Map<String, Object> realmAccess = java.util.Map.of("roles", java.util.List.of("ADMIN"));
+        when(jwt.getClaim("realm_access")).thenReturn(realmAccess);
+        
+        assertNotNull(converter.convert(jwt));
     }
 }

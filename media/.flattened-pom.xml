@@ -82,14 +82,7 @@
         <artifactId>jacoco-maven-plugin</artifactId>
         <configuration>
           <excludes>
-            <exclude>**/*Application.class</exclude>
-            <exclude>**/config/**</exclude>
-            <exclude>**/exception/**</exclude>
-            <exclude>**/constants/**</exclude>
-            <exclude>**/mapper/**</exclude>
-            <exclude>**/model/**</exclude>
-            <exclude>**/dto/**</exclude>
-            <exclude>**/viewmodel/**</exclude>
+            <exclude>**/nonexistent/**</exclude>
           </excludes>
         </configuration>
       </plugin>
