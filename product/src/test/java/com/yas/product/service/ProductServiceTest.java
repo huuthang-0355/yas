@@ -37,26 +37,20 @@ import com.yas.product.viewmodel.product.ProductVariationPostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePostVm;
 import com.yas.product.viewmodel.productoption.ProductOptionValuePutVm;
 import com.yas.product.viewmodel.product.ProductOptionValueDisplay;
-import com.yas.product.viewmodel.NoFileMediaVm;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.ArrayList;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.yas.product.viewmodel.ImageVm;
+import com.yas.product.viewmodel.product.ProductThumbnailVm;
+import org.mockito.Captor;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+    @Captor
+    private ArgumentCaptor<Product> productCaptor;
+
 
     @Mock
     private MediaService mediaService;
@@ -529,8 +523,8 @@ class ProductServiceTest {
         productService.deleteProduct(productId);
 
         // Then
-        verify(productRepository).save(productCaptor.capture());
-        assertThat(productCaptor.getValue().isPublished()).isFalse();
+        verify(productRepository).save(product);
+        assertThat(product.isPublished()).isFalse();
     }
 
     @Test
@@ -559,10 +553,10 @@ class ProductServiceTest {
         Product product = Product.builder().id(1L).thumbnailMediaId(1L).brand(brand).build();
         when(brandRepository.findBySlug(brandSlug)).thenReturn(Optional.of(brand));
         when(productRepository.findAllByBrandAndIsPublishedTrueOrderByIdAsc(brand)).thenReturn(List.of(product));
-        when(mediaService.getMedia(1L)).thenReturn(new ImageVm(1L, "url"));
+        when(mediaService.getMedia(1L)).thenReturn(new NoFileMediaVm(1L, "caption", "fileName", "mediaType", "url"));
 
         // When
-        List<ProductThumbnailVm> result = productService.getProductsByBrand(brandSlug);
+        var result = productService.getProductsByBrand(brandSlug);
 
         // Then
         assertThat(result).hasSize(1);
@@ -576,7 +570,6 @@ class ProductServiceTest {
         when(brandRepository.findBySlug(brandSlug)).thenReturn(Optional.empty());
 
         // When & Then
-        assertThatThrownBy(() -> productService.getProductsByBrand(brandSlug))
-            .isInstanceOf(NotFoundException.class);
+        assertThrows(NotFoundException.class, () -> productService.getProductsByBrand(brandSlug));
     }
 }
