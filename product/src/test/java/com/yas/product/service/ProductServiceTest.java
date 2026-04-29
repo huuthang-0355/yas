@@ -517,4 +517,66 @@ class ProductServiceTest {
         assertThat(result.productCheckoutListVms().getFirst().thumbnailUrl()).isEqualTo("http://thumb-880");
         assertThat(result.productCheckoutListVms().get(1).thumbnailUrl()).isNullOrEmpty();
     }
+
+    @Test
+    void testDeleteProduct_WhenProductId_ThenProductIsUnpublished() {
+        // Given
+        Long productId = 1L;
+        Product product = Product.builder().id(productId).isPublished(true).build();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+
+        // When
+        productService.deleteProduct(productId);
+
+        // Then
+        verify(productRepository).save(productCaptor.capture());
+        assertThat(productCaptor.getValue().isPublished()).isFalse();
+    }
+
+    @Test
+    void testDeleteProduct_WhenProductIsVariation_ThenDeleteCombinations() {
+        // Given
+        Long productId = 2L;
+        Product parent = Product.builder().id(1L).build();
+        Product variation = Product.builder().id(productId).isPublished(true).parent(parent).build();
+        List<ProductOptionCombination> combinations = List.of(new ProductOptionCombination());
+        when(productRepository.findById(productId)).thenReturn(Optional.of(variation));
+        when(productOptionCombinationRepository.findAllByProduct(variation)).thenReturn(combinations);
+
+        // When
+        productService.deleteProduct(productId);
+
+        // Then
+        verify(productOptionCombinationRepository).deleteAll(combinations);
+        verify(productRepository).save(variation);
+    }
+
+    @Test
+    void testGetProductsByBrand_WhenBrandFound_ShouldReturnProducts() {
+        // Given
+        String brandSlug = "test-brand";
+        Brand brand = Brand.builder().id(1L).slug(brandSlug).build();
+        Product product = Product.builder().id(1L).thumbnailMediaId(1L).brand(brand).build();
+        when(brandRepository.findBySlug(brandSlug)).thenReturn(Optional.of(brand));
+        when(productRepository.findAllByBrandAndIsPublishedTrueOrderByIdAsc(brand)).thenReturn(List.of(product));
+        when(mediaService.getMedia(1L)).thenReturn(new ImageVm(1L, "url"));
+
+        // When
+        List<ProductThumbnailVm> result = productService.getProductsByBrand(brandSlug);
+
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo(product.getId());
+    }
+
+    @Test
+    void testGetProductsByBrand_WhenBrandNotFound_ShouldThrowNotFoundException() {
+        // Given
+        String brandSlug = "non-existent-brand";
+        when(brandRepository.findBySlug(brandSlug)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> productService.getProductsByBrand(brandSlug))
+            .isInstanceOf(NotFoundException.class);
+    }
 }
