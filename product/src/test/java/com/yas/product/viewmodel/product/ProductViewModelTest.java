@@ -49,7 +49,6 @@ class ProductViewModelTest {
             .brand(brand)
             .price(10.0)
             .taxClassId(2L)
-            .createdOn(ZonedDateTime.now())
             .parent(parent)
             .build();
 
